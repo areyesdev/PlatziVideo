@@ -1,50 +1,57 @@
 /* eslint-disable global-require */
+import express from 'express';
+import dotenv from 'dotenv';
+import webpack from 'webpack';
+import helmet from 'helmet';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-//Funcion para renderear los componentes como string
 import { Provider } from 'react-redux';
 import { createStore } from 'redux';
 import { renderRoutes } from 'react-router-config';
 import { StaticRouter } from 'react-router-dom';
-import express from 'express';
-import webpack from 'webpack';
 import serverRoutes from '../frontend/routes/serverRoutes';
 import reducer from '../frontend/reducers';
 import initialState from '../frontend/initialState';
-import config from './config';
-import Layout from '../frontend/components/Layout';
 
-const { env, port } = config;
+dotenv.config();
 
+const { ENV, PORT } = process.env;
 const app = express();
-if (env === 'development') {
-  console.log(env);
+
+if (ENV === 'development') {
+  console.log('Development config');
   const webpackConfig = require('../../webpack.config');
   const webpackDevMiddleware = require('webpack-dev-middleware');
   const webpackHotMiddleware = require('webpack-hot-middleware');
   const compiler = webpack(webpackConfig);
-  const serverConfig = { port: process.env.PORT, hot: true };
+  const serverConfig = { port: PORT, hot: true };
 
   app.use(webpackDevMiddleware(compiler, serverConfig));
   app.use(webpackHotMiddleware(compiler));
-
+} else {
+  app.use(express.static(`${__dirname}/public`));
+  app.use(helmet());
+  app.use(helmet.permittedCrossDomainPolicies());
+  app.disable('x-powered-by');
 }
 
 const setResponse = (html, preloadedState) => {
-  return (`<!DOCTYPE html>
-    <html>
-      <head>
-        <link rel="stylesheet" href="assets/app.css" type="text/css"/> 
-        <title>Platzi Video</title>
-      </head>
-      <body>
-        <div id="app">${html}</div>
-      </body>
+  return (`
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <link rel="stylesheet" href="assets/app.css" type="text/css">
+      <title>Platzi Video</title>
+    </head>
+    <body>
+      <div id="app">${html}</div>
       <script>
         window.__PRELOADED_STATE__ = ${JSON.stringify(preloadedState).replace(/</g, '\\u003c')}
       </script>
       <script src="assets/app.js" type="text/javascript"></script>
-    </html>`);
+    </body>
+  </html>
+  `);
 };
 
 const renderApp = (req, res) => {
@@ -53,19 +60,17 @@ const renderApp = (req, res) => {
   const html = renderToString(
     <Provider store={store}>
       <StaticRouter location={req.url} context={{}}>
-        <Layout>
-          {renderRoutes(serverRoutes)}
-        </Layout>
+        {renderRoutes(serverRoutes)}
       </StaticRouter>
     </Provider>,
-  ); //con esta funcion preparamos el provider para el redux y el router,
-  //dentro del router colocamos la funcion renderRoutes y le pasamos el archivo de las rutas
+  );
+
   res.send(setResponse(html, preloadedState));
 };
 
 app.get('*', renderApp);
 
-app.listen(port, (err) => {
+app.listen(PORT, (err) => {
   if (err) console.log(err);
-  else console.log(`Server running on port ${port}`);
+  else console.log(`Server running on port ${PORT}`);
 });
